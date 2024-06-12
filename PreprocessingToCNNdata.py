@@ -3,9 +3,13 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
+from sklearn.preprocessing import StandardScaler
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv1D, MaxPooling1D, Flatten, Dense
 
 class InData:
-    label = 0.0  # クラスプロパティとしてのラベル（実数）
+    label = 1  # クラスプロパティとしてのラベル（実数）
     InData = np.array([])  # データプロパティ
 
     deletelen = 2  # seconds to cut from start and end
@@ -14,7 +18,7 @@ class InData:
     step_length = 2  # step size in seconds
 
     def __init__(self, url, label, output_name) -> None:
-        self.label = label
+        self.label = int(label)  # ラベルを整数に変換
         self.output_name = output_name
         with open(url, encoding='utf8', newline='') as f:
             csvreader = csv.reader(f, delimiter=',')
@@ -70,10 +74,8 @@ class InData:
     def save_segments(self, segments, output_dir):
         os.makedirs(output_dir, exist_ok=True)  # 出力ディレクトリが存在しない場合は作成
         for i, segment in enumerate(segments):
-            # ラベルを追加
-            segment_with_label = np.column_stack((segment, np.full((segment.shape[0], 1), self.label)))
             filename = f"{output_dir}/{self.output_name}_{i}.csv"
-            np.savetxt(filename, segment_with_label, delimiter=",", header="Timestamp,X,Y,Z,Label", comments='', fmt='%10.5f')
+            np.savetxt(filename, segment[:, 1:], delimiter=",", header='', comments='', fmt='%10.5f')
 
     def print_segment(self, segment):
         plt.figure(figsize=(10, 6))
@@ -87,10 +89,38 @@ class InData:
         plt.grid()
         plt.show()
 
+    def train_cnn(self, segments):
+        # データとラベルを分離
+        X = np.array([segment[:, 1:4] for segment in segments])  # X, Y, Z軸のデータ
+        y = np.array([self.label] * len(segments))  # 全セグメントに同じラベルを設定
+
+        # データの標準化
+        scaler = StandardScaler()
+        X = scaler.fit_transform(X.reshape(-1, 3)).reshape(X.shape)
+
+        # CNNモデルの構築
+        model = Sequential([
+            Conv1D(filters=64, kernel_size=3, activation='relu', input_shape=(X.shape[1], X.shape[2])),
+            MaxPooling1D(pool_size=2),
+            Flatten(),
+            Dense(100, activation='relu'),
+            Dense(1)  # 回帰問題の場合（分類問題の場合はDense(num_classes, activation='softmax')）
+        ])
+
+        model.compile(optimizer='adam', loss='mean_squared_error')
+        model.summary()
+
+        # モデルの訓練
+        model.fit(X, y, epochs=10, batch_size=32, validation_split=0.2)
+
 def __main__():
+
     file_path = '平地\平坦02-K.csv'
-    output_name = '平坦02-'
-    data = InData(file_path, 0, output_name)
+    # 平坦 = ground
+    # きつい坂上り = SteepUphill
+    # きつい坂下り = SteepDownhill
+    output_name = 'ground02'
+    data = InData(file_path, 2, output_name)
     if data is None:
         print('データの読み込みに失敗しました')
         return
@@ -98,8 +128,11 @@ def __main__():
     segments = data.segment_data()
 
     # セグメントを保存
-    output_dir = 'C:\\Users\\tp240\\OneDrive\\デスクトップ\\実験データ\\平地\\加工済みデータ'
+    output_dir = 'C:\\Users\\tp240\\Desktop\\outData\\20240612'
     data.save_segments(segments, output_dir)
+
+    # CNNモデルの訓練
+    data.train_cnn(segments)
 
     # プロット
     # if segments:

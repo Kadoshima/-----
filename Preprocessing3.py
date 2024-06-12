@@ -3,9 +3,13 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
+from sklearn.preprocessing import StandardScaler
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv1D, MaxPooling1D, Flatten, Dense
 
 class InData:
-    label = 0.0  # クラスプロパティとしてのラベル（実数）
+    label = 1  # クラスプロパティとしてのラベル（実数）
     InData = np.array([])  # データプロパティ
 
     deletelen = 2  # seconds to cut from start and end
@@ -14,7 +18,7 @@ class InData:
     step_length = 2  # step size in seconds
 
     def __init__(self, url, label, output_name) -> None:
-        self.label = label
+        self.label = int(label)  # ラベルを整数に変換
         self.output_name = output_name
         with open(url, encoding='utf8', newline='') as f:
             csvreader = csv.reader(f, delimiter=',')
@@ -70,10 +74,8 @@ class InData:
     def save_segments(self, segments, output_dir):
         os.makedirs(output_dir, exist_ok=True)  # 出力ディレクトリが存在しない場合は作成
         for i, segment in enumerate(segments):
-            # ラベルを追加
-            segment_with_label = np.column_stack((segment, np.full((segment.shape[0], 1), self.label)))
             filename = f"{output_dir}/{self.output_name}_{i}.csv"
-            np.savetxt(filename, segment_with_label, delimiter=",", header="Timestamp,X,Y,Z,Label", comments='', fmt='%10.5f')
+            np.savetxt(filename, segment[:, 1:], delimiter=",", header='', comments='', fmt='%10.5f')
 
     def print_segment(self, segment):
         plt.figure(figsize=(10, 6))
@@ -88,9 +90,9 @@ class InData:
         plt.show()
 
 def __main__():
-    file_path = '平地\平坦02-K.csv'
-    output_name = '平坦02-'
-    data = InData(file_path, 0, output_name)
+    file_path = 'きつい坂上り\きつい上り坂02-K.csv'
+    output_name = 'きつい上り坂02'
+    data = InData(file_path, 2, output_name)
     if data is None:
         print('データの読み込みに失敗しました')
         return
@@ -98,12 +100,8 @@ def __main__():
     segments = data.segment_data()
 
     # セグメントを保存
-    output_dir = 'C:\\Users\\tp240\\OneDrive\\デスクトップ\\実験データ\\平地\\加工済みデータ'
+    output_dir = 'C:\\Users\\tp240\\OneDrive\\デスクトップ\\実験データ\\きつい坂上り\\加工済みデータ'
     data.save_segments(segments, output_dir)
-
-    # プロット
-    # if segments:
-        # data.print_segment(segments[0])  # 最初のセグメントをプロット
 
 if __name__ == '__main__':
     __main__()
